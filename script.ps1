@@ -1,41 +1,78 @@
-# ============================================================
-#  INSTALADOR PROFESIONAL - LOGICA WINUTIL (Chris Titus)
-#  Adaptado para: ChiguiLaptops
-# ============================================================
+$ErrorActionPreference = "SilentlyContinue"
+Write-Host "`n=== INICIANDO CONFIGURACIÓN GENERAL ===" -ForegroundColor Cyan
 
 $Apps = @(
-    @{ Name = "Google Chrome";      Id = "Google.Chrome";         Type = "winget" }
-    @{ Name = "VLC Media Player";   Id = "VideoLAN.VLC";          Type = "winget" }
-    @{ Name = "7-Zip";              Id = "7zip.7zip";             Type = "winget" }
-    @{ Name = "AnyDesk";            Id = "AnyDeskSoftwareGmbH.AnyDesk"; Type = "winget" }
-    @{ Name = "Foxit PDF Reader";   Id = "Foxit.FoxitReader";     Type = "winget" }
-    @{ Name = "Lightshot";          Id = "Skillbrains.Lightshot"; Type = "winget" }
-    @{ Name = "Open Shell";         Id = "Open-Shell.Open-Shell-Menu"; Type = "winget" }
-    @{ Name = "K-Lite Codecs";      Id = "CodecGuide.K-LiteCodecPack.Basic"; Type = "winget" }
-    @{ Name = "Visual C++ 2015-2022"; Id = "Microsoft.VCRedist.2015+.x64"; Type = "winget" }
-    @{ Name = "DotNet Desktop 6";   Id = "Microsoft.DotNet.DesktopRuntime.6"; Type = "winget" }
+    @{ Name = "Google Chrome";      Id = "Google.Chrome" }
+    @{ Name = "VLC Media Player";   Id = "VideoLAN.VLC" }
+    @{ Name = "7-Zip";              Id = "7zip.7zip" }
+    @{ Name = "AnyDesk";            Id = "AnyDeskSoftwareGmbH.AnyDesk" }
+    @{ Name = "Foxit PDF Reader";   Id = "Foxit.FoxitReader" }
+    @{ Name = "Lightshot";          Id = "Skillbrains.Lightshot" }
+    @{ Name = "Open Shell";         Id = "Open-Shell.Open-Shell-Menu" }
+    @{ Name = "K-Lite Codecs";      Id = "CodecGuide.K-LiteCodecPack.Basic" }
 )
 
-Write-Host "`n=== CHIGUILAPTOPS: INICIANDO INSTALACION AUTOMATICA ===" -ForegroundColor Cyan
-
-# Aseguramos que Winget use la fuente correcta antes de empezar (Evita errores de msstore)
-Write-Host "Configurando fuentes de Winget..." -ForegroundColor Gray
+Write-Host "[*] Reparando base de datos de Winget..." -ForegroundColor Gray
 winget source reset --force | Out-Null
+winget source update | Out-Null
 
 foreach ($App in $Apps) {
     Write-Host "`n[*] Instalando $($App.Name)..." -ForegroundColor Yellow
     
-    # Parámetros exactos que usa WinUtil:
-    # --silent (sin ventanas), --accept-package-agreements (acepta licencias), 
-    # --source winget (evita fallos de la Microsoft Store)
-    $process = Start-Process winget -ArgumentList "install --id $($App.Id) --silent --accept-package-agreements --accept-source-agreements --source winget" -Wait -PassThru
+    $args = "install --id $($App.Id) --silent --accept-package-agreements --accept-source-agreements --source winget --force"
+    
+    $process = Start-Process winget -ArgumentList $args -Wait -PassThru
     
     if ($process.ExitCode -eq 0) {
-        Write-Host "[OK] $($App.Name) instalado correctamente." -ForegroundColor Green
+        Write-Host "    [OK] Instalado correctamente." -ForegroundColor Green
     } else {
-        Write-Host "[!] Error al instalar $($App.Name). Código: $($process.ExitCode)" -ForegroundColor Red
+        Write-Host "    [!] Error $($process.ExitCode). Reintentando sin fuente específica..." -ForegroundColor Magenta
+        winget install --id $($App.Id) --silent --accept-package-agreements --accept-source-agreements
     }
 }
 
-Write-Host "`n=== PROCESO FINALIZADO - LAPTOP LISTA PARA ENTREGA ===" -ForegroundColor Cyan
-Pause
+Write-Host "`n[*] Instalando Microsoft Office 2021 LTSC..." -ForegroundColor Yellow
+$OfficePath = "$env:TEMP\OfficeSetup"
+if (!(Test-Path $OfficePath)) { New-Item -ItemType Directory -Path $OfficePath | Out-Null }
+
+$XmlContent = @"
+<Configuration>
+  <Add OfficeClientEdition="64" Channel="PerpetualVL2021">
+    <Product ID="ProPlus2021Volume" PIDKEY="HFPBN-RYGG8-HQWCW-26CH6-PDPVF">
+      <Language ID="es-es" />
+      <ExcludeApp ID="Access" /><ExcludeApp ID="Groove" /><ExcludeApp ID="Lync" />
+      <ExcludeApp ID="OneDrive" /><ExcludeApp ID="OneNote" /><ExcludeApp ID="Outlook" />
+      <ExcludeApp ID="Publisher" /><ExcludeApp ID="Teams" />
+    </Product>
+  </Add>
+  <Property Name="AUTOACTIVATE" Value="0" />
+  <Property Name="FORCEAPPSHUTDOWN" Value="FALSE" />
+  <Display Level="Full" AcceptEULA="TRUE" />
+</Configuration>
+"@
+
+$XmlPath = "$OfficePath\config_ltsc.xml"
+$XmlContent | Out-File -FilePath $XmlPath -Encoding utf8
+$SetupUrl = "https://github.com/RafaelYepez/utilidades/raw/refs/heads/main/setup.exe"
+$SetupPath = "$OfficePath\setup.exe"
+
+try {
+    Invoke-WebRequest -Uri $SetupUrl -OutFile $SetupPath -ErrorAction Stop
+    Start-Process -FilePath $SetupPath -ArgumentList "/configure `"$XmlPath`"" -Wait
+    Write-Host "    [OK] Office 2021 configurado." -ForegroundColor Green
+} catch {
+    Write-Host "    [!] Falló la descarga de Office." -ForegroundColor Red
+}
+
+Write-Host "`n[*] Activando Windows y Office (Modo Silencioso)..." -ForegroundColor Yellow
+try {
+    & ([scriptblock]::Create((irm https://get.activated.win))) /HWID
+    & ([scriptblock]::Create((irm https://get.activated.win))) /Ohook
+    Write-Host "[OK] Sistema activado." -ForegroundColor Green
+} catch {
+    Write-Host "[!] Error en activación remota." -ForegroundColor Red
+}
+
+Write-Host "`n=== CHIGUILAPTOPS: PROCESO COMPLETADO ===" -ForegroundColor Cyan
+Write-Host "Presione cualquier tecla para cerrar..."
+$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
