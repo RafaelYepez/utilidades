@@ -9,7 +9,7 @@ Write-Host "[*] Reseteando fuentes de Winget..." -ForegroundColor Gray
 winget source reset --force | Out-Null
 winget source update | Out-Null
 
-# 2. LISTA DE APLICACIONES (IDs actualizados como en winutil)
+# 2. LISTA DE APLICACIONES (sin AnyDesk ni Open-Shell)
 $Apps = @(
     @{ Name = "Google Chrome";      Id = "Google.Chrome" }
     @{ Name = "VLC Media Player";   Id = "VideoLAN.VLC" }
@@ -19,7 +19,7 @@ $Apps = @(
     @{ Name = "K-Lite Codecs";      Id = "CodecGuide.K-LiteCodecPack.Basic" }
 )
 
-# 3. INSTALACIÓN NORMAL
+# 3. INSTALACIÓN NORMAL CON WINGET
 foreach ($App in $Apps) {
     Write-Host "`n[*] Instalando $($App.Name)..." -ForegroundColor Yellow
     $cmd = "install --id $($App.Id) --silent --accept-package-agreements --accept-source-agreements --source winget --force"
@@ -33,50 +33,40 @@ foreach ($App in $Apps) {
     }
 }
 
-# 4. ANYDESK (ID actualizado como en winutil)
-Write-Host "`n[*] Instalando AnyDesk..." -ForegroundColor Yellow
-$AnyDeskCmd = "install --id AnyDesk.AnyDesk --silent --accept-package-agreements --accept-source-agreements --source winget --force"
-$process = Start-Process winget -ArgumentList $AnyDeskCmd -Wait -PassThru
-
-if ($process.ExitCode -eq 0) {
-    Write-Host "    [OK] AnyDesk instalado" -ForegroundColor Green
-} else {
-    Write-Host "    [!] AnyDesk falló (Código $($process.ExitCode)) - Intentando método alternativo" -ForegroundColor Red
-    # Método alternativo directo (por si winget falla)
-    try {
-        $url = "https://download.anydesk.com/AnyDesk.exe"
-        $out = "$env:TEMP\AnyDesk.exe"
-        Invoke-WebRequest -Uri $url -OutFile $out
-        Start-Process $out -ArgumentList "--install --silent --remove-first" -Wait
-        Write-Host "    [OK] AnyDesk instalado por método directo" -ForegroundColor Green
-    } catch {
-        Write-Host "    [!] Falló también el método directo" -ForegroundColor Red
-    }
+# 4. ANYDESK - Instalación Directa (evita winget)
+Write-Host "`n[*] Instalando AnyDesk (método directo)..." -ForegroundColor Yellow
+try {
+    $AnyDeskUrl = "https://download.anydesk.com/AnyDesk.exe"
+    $AnyDeskPath = "$env:TEMP\AnyDesk.exe"
+    
+    Invoke-WebRequest -Uri $AnyDeskUrl -OutFile $AnyDeskPath -UseBasicParsing
+    Write-Host "    Descargado. Instalando en silencio..." -ForegroundColor Gray
+    
+    Start-Process -FilePath $AnyDeskPath -ArgumentList "--install --silent --remove-first" -Wait -NoNewWindow
+    Write-Host "    [OK] AnyDesk instalado correctamente" -ForegroundColor Green
+} 
+catch {
+    Write-Host "    [!] Error instalando AnyDesk: $($_.Exception.Message)" -ForegroundColor Red
 }
 
-# 5. OPEN-SHELL (Método más confiable - como recomiendan en issues)
-Write-Host "`n[*] Instalando Open-Shell..." -ForegroundColor Yellow
-$OpenShellUrl = "https://github.com/Open-Shell/Open-Shell-Menu/releases/download/v4.4.198/OpenShellSetup_4_4_198.exe"
-$OutFile = "$env:TEMP\OpenShellSetup.exe"
-
+# 5. OPEN-SHELL - Instalación Directa (versión estable)
+Write-Host "`n[*] Instalando Open-Shell (método directo)..." -ForegroundColor Yellow
 try {
-    Invoke-WebRequest -Uri $OpenShellUrl -OutFile $OutFile -UseBasicParsing
-    Write-Host "    Descargado. Instalando silenciosamente..." -ForegroundColor Gray
+    $OpenShellUrl = "https://github.com/Open-Shell/Open-Shell-Menu/releases/download/v4.4.198/OpenShellSetup_4_4_198.exe"
+    $OpenShellPath = "$env:TEMP\OpenShellSetup.exe"
     
-    # /qn ADDLOCAL=StartMenu → instala solo el menú clásico (recomendado)
-    Start-Process -FilePath $OutFile -ArgumentList "/qn ADDLOCAL=StartMenu" -Wait -NoNewWindow
+    Invoke-WebRequest -Uri $OpenShellUrl -OutFile $OpenShellPath -UseBasicParsing
+    Write-Host "    Descargado. Instalando en silencio..." -ForegroundColor Gray
     
+    Start-Process -FilePath $OpenShellPath -ArgumentList "/qn ADDLOCAL=StartMenu" -Wait -NoNewWindow
     Write-Host "    [OK] Open-Shell instalado correctamente" -ForegroundColor Green
 } 
 catch {
-    Write-Host "    [!] Error al instalar Open-Shell" -ForegroundColor Red
-    Write-Host "    $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "    [!] Error instalando Open-Shell: $($_.Exception.Message)" -ForegroundColor Red
 }
 
 # 6. OFFICE 2021 LTSC (tu código original)
 Write-Host "`n[*] Instalando Microsoft Office 2021 LTSC..." -ForegroundColor Yellow
-# ... (mantengo tu bloque de Office sin cambios) ...
-
 $OfficePath = "$env:TEMP\OfficeSetup"
 if (!(Test-Path $OfficePath)) { New-Item -ItemType Directory -Path $OfficePath | Out-Null }
 
@@ -104,9 +94,9 @@ $SetupUrl = "https://github.com/RafaelYepez/utilidades/raw/refs/heads/main/setup
 $SetupPath = "$OfficePath\setup.exe"
 
 try {
-    Invoke-WebRequest -Uri $SetupUrl -OutFile $SetupPath
+    Invoke-WebRequest -Uri $SetupUrl -OutFile $SetupPath -ErrorAction Stop
     Start-Process -FilePath $SetupPath -ArgumentList "/configure `"$XmlPath`"" -Wait
-    Write-Host "    [OK] Office instalado" -ForegroundColor Green
+    Write-Host "    [OK] Office procesado" -ForegroundColor Green
 } catch {
     Write-Host "    [!] Error en Office" -ForegroundColor Red
 }
@@ -121,6 +111,6 @@ try {
     Write-Host "    [!] Error en activación" -ForegroundColor Red
 }
 
-Write-Host "`n=== PROCESO FINALIZADO ===" -ForegroundColor Cyan
+Write-Host "`n=== PROCESO FINALIZADO - CHIGUILAPTOPS LISTA ===" -ForegroundColor Cyan
 Write-Host "Presiona cualquier tecla para salir..."
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
